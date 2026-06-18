@@ -235,7 +235,10 @@ def desired_intervals(markers, normal):
 
 def to_override_entries(date_str, intervals):
     if not intervals:
-        return [{"date": date_str, "isUnavailable": True}]
+        # Cal.com requires startTime/endTime as strings on every override
+        # entry, even when isUnavailable is set; 00:00-00:00 is a harmless
+        # placeholder since isUnavailable is what actually takes effect.
+        return [{"date": date_str, "startTime": "00:00", "endTime": "00:00", "isUnavailable": True}]
     return [{"date": date_str, "startTime": format_hhmm(s), "endTime": format_hhmm(e)} for s, e in intervals]
 
 

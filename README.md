@@ -70,16 +70,13 @@ python3 cal_sync.py --days 30 --config /path/to/config.json
 python3 -m unittest test_cal_sync -v
 ```
 
-## If something looks wrong against your Cal.com account
-
-Two assumptions in this code aren't fully confirmed against current
-Cal.com docs and are worth a `--dry-run` check the first time:
+## Notes
 
 - Multiple time ranges on one date are sent as multiple override entries
-  sharing the same `date`.
+  sharing the same `date`. Not yet confirmed against a live account; if
+  Cal.com rejects it, `--dry-run` plus the error message (now includes the
+  full API response body) will show exactly what to adjust.
 - A date with zero remaining availability is sent as
-  `{"date": ..., "isUnavailable": true}`.
-
-If either is wrong for your account, Cal.com's API will return an error
-naming the field, and `--dry-run` will show you the exact payload before
-anything is written.
+  `{"date": ..., "startTime": "00:00", "endTime": "00:00", "isUnavailable": true}`.
+  Confirmed against a live 400 response: Cal.com requires `startTime`/
+  `endTime` as strings on every override entry, even unavailable ones.

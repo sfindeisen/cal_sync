@@ -34,6 +34,14 @@ class TestComputeIntervals(unittest.TestCase):
 
 
 class TestDiffAndMerge(unittest.TestCase):
+    def test_fully_unavailable_includes_placeholder_times(self):
+        # Cal.com rejects override entries without string startTime/endTime,
+        # even when isUnavailable is set (confirmed via a live 400 response).
+        entries = cs.to_override_entries("2026-06-22", [])
+        self.assertEqual(
+            entries, [{"date": "2026-06-22", "startTime": "00:00", "endTime": "00:00", "isUnavailable": True}]
+        )
+
     def test_create_update_unchanged(self):
         existing = [{"date": "2026-07-02", "startTime": "09:00", "endTime": "10:00"}]
         desired = {
