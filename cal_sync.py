@@ -17,6 +17,9 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 import requests
+from google.auth.transport.requests import Request
+from google.oauth2.credentials import Credentials
+from google_auth_oauthlib.flow import InstalledAppFlow
 
 DEFAULT_CONFIG = Path.home() / ".config/cal_sync/config.json"
 DEFAULT_CREDENTIALS = Path.home() / ".config/cal_sync/credentials.json"
@@ -81,46 +84,44 @@ def classify(title):
     return None, None
 
 
-# ---------- Google Calendar (read-only, plain REST) ----------
+# ---------- Google Calendar (read-only, plain REST for the calls; the
+# official google-auth library handles tokens, since hand-rolling OAuth
+# refresh/bootstrap is exactly the kind of fiddly code that library exists
+# to avoid) ----------
 
-def refresh_google_token(info, token_path, credentials_path):
-    refresh_token = info.get("refresh_token")
-    if not refresh_token:
-        sys.exit("Google token expired and has no refresh_token; re-authorize (see README).")
-    client_id, client_secret = info.get("client_id"), info.get("client_secret")
-    if (not client_id or not client_secret) and credentials_path.exists():
-        installed = json.loads(credentials_path.read_text()).get("installed", {})
-        client_id = client_id or installed.get("client_id")
-        client_secret = client_secret or installed.get("client_secret")
-    resp = requests.post(
-        info.get("token_uri", "https://oauth2.googleapis.com/token"),
-        data={
-            "client_id": client_id,
-            "client_secret": client_secret,
-            "refresh_token": refresh_token,
-            "grant_type": "refresh_token",
-        },
-    )
-    resp.raise_for_status()
-    info["token"] = resp.json()["access_token"]
-    token_path.write_text(json.dumps(info))
-    return info["token"]
+SCOPES = ["https://www.googleapis.com/auth/calendar.readonly"]
 
 
-def google_get(url, params, token_path, credentials_path):
-    if not token_path.exists():
-        sys.exit(f"Google token not found: {token_path} (see README).")
-    info = json.loads(token_path.read_text())
-    token = info.get("token") or info.get("access_token")
-    resp = requests.get(url, params=params, headers={"Authorization": f"Bearer {token}"})
-    if resp.status_code == 401:
-        token = refresh_google_token(info, token_path, credentials_path)
-        resp = requests.get(url, params=params, headers={"Authorization": f"Bearer {token}"})
-    resp.raise_for_status()
-    return resp.json()
+def load_google_credentials(token_path, credentials_path):
+    creds = None
+    if token_path.exists():
+        creds = Credentials.from_authorized_user_file(str(token_path), SCOPES)
+        if creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+
+    if not creds or not creds.valid:
+        if not credentials_path.exists():
+            sys.exit(
+                f"No Google credentials found ({credentials_path} is missing). "
+                "Download an OAuth Desktop app client JSON from Google Cloud "
+                "Console and save it there."
+            )
+        if not sys.stdin.isatty():
+            sys.exit(
+                f"No valid Google token at {token_path}. Run this command once "
+                "interactively (not from cron) to authorize Google Calendar access."
+            )
+        print("No valid Google token found; opening a browser to authorize access...")
+        flow = InstalledAppFlow.from_client_secrets_file(str(credentials_path), SCOPES)
+        creds = flow.run_local_server(port=0)
+
+    token_path.parent.mkdir(parents=True, exist_ok=True)
+    token_path.write_text(creds.to_json())
+    return creds
 
 
 def fetch_all_day_events(calendar_id, token_path, credentials_path, days):
+    creds = load_google_credentials(token_path, credentials_path)
     now = datetime.now(timezone.utc)
     url = f"https://www.googleapis.com/calendar/v3/calendars/{calendar_id}/events"
     params = {
@@ -129,9 +130,12 @@ def fetch_all_day_events(calendar_id, token_path, credentials_path, days):
         "singleEvents": "true",
         "orderBy": "startTime",
     }
+    headers = {"Authorization": f"Bearer {creds.token}"}
     events = []
     while True:
-        data = google_get(url, params, token_path, credentials_path)
+        resp = requests.get(url, params=params, headers=headers)
+        resp.raise_for_status()
+        data = resp.json()
         events.extend(data.get("items", []))
         page_token = data.get("nextPageToken")
         if not page_token:

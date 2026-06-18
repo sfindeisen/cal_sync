@@ -13,8 +13,7 @@ Syncs Cal.com date overrides from FD/SD all-day events in a Google Calendar.
 
 ## Files
 
-- `cal_sync.py` - the sync tool. Run this regularly (e.g. via cron).
-- `authorize.py` - one-time setup to create `token.json`. Run this once.
+- `cal_sync.py` - the tool. Run this regularly (e.g. via cron).
 - `config.example.json` - copy and edit.
 - `requirements.txt` - dependencies.
 - `test_cal_sync.py` - tests.
@@ -30,15 +29,15 @@ pip install -r requirements.txt --break-system-packages
 Place your OAuth client file at `~/.config/cal_sync/credentials.json`
 (Google Cloud Console -> Desktop app -> download JSON).
 
-You don't have a `token.json` yet, so create one:
-
-```bash
-python3 authorize.py
-```
-
-This opens a browser, asks for read-only Calendar access, and writes
-`~/.config/cal_sync/token.json`. `cal_sync.py` only ever reads from this
-calendar, it never writes to it.
+You don't need a `token.json` yet. The first time you run `cal_sync.py`
+interactively (i.e. not from cron) with no token present, it opens a
+browser for you to grant read-only Calendar access, then saves
+`~/.config/cal_sync/token.json` automatically. Every run after that just
+uses the saved token, refreshing it silently when it expires. If you ever
+run it from cron before that first interactive run, it will exit with a
+clear message asking you to run it interactively once first instead of
+hanging. `cal_sync.py` only ever reads from this calendar, it never writes
+to it.
 
 ### 2. Cal.com API key
 
