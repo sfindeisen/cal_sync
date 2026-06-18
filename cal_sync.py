@@ -167,20 +167,20 @@ class CalCom:
             {"Authorization": f"Bearer {api_key}", "cal-api-version": api_version}
         )
 
-    def list_schedules(self):
-        r = self.session.get(f"{self.base_url}/schedules")
-        r.raise_for_status()
+    def _request(self, method, path, **kwargs):
+        r = self.session.request(method, f"{self.base_url}{path}", **kwargs)
+        if not r.ok:
+            sys.exit(f"Cal.com API error {r.status_code} on {method} {path}:\n{r.text}")
         return r.json()["data"]
+
+    def list_schedules(self):
+        return self._request("GET", "/schedules")
 
     def get_schedule(self, schedule_id):
-        r = self.session.get(f"{self.base_url}/schedules/{schedule_id}")
-        r.raise_for_status()
-        return r.json()["data"]
+        return self._request("GET", f"/schedules/{schedule_id}")
 
     def set_overrides(self, schedule_id, overrides):
-        r = self.session.patch(f"{self.base_url}/schedules/{schedule_id}", json={"overrides": overrides})
-        r.raise_for_status()
-        return r.json()["data"]
+        return self._request("PATCH", f"/schedules/{schedule_id}", json={"overrides": overrides})
 
     def resolve_schedule(self, schedule_id):
         if schedule_id is not None:
@@ -215,7 +215,8 @@ def collect_markers(events):
         if marker is None:
             continue
         if not is_standard:
-            print(f"WARNING: non-standard {marker} marker: {event.get('summary')!r}", file=sys.stderr)
+            event_date = event.get("start", {}).get("date")
+            print(f"WARNING: non-standard {marker} marker on {event_date}: {event.get('summary')!r}", file=sys.stderr)
         for d in expand_dates(event):
             markers[d.isoformat()].add(marker)
     return markers
@@ -288,12 +289,15 @@ def run(config, dry_run):
     desired = desired_intervals(markers, normal_availability(schedule))
     final, created, updated, unchanged = diff_and_merge(schedule.get("overrides", []), desired)
 
+    def label(d):
+        return "+".join(sorted(markers[d]))
+
     for d in created:
-        print(f"  CREATE {d}: {describe(desired[d])}")
+        print(f"  TRIM {d} to {describe(desired[d])} due to {label(d)}")
     for d in updated:
-        print(f"  UPDATE {d}: {describe(desired[d])}")
+        print(f"  TRIM {d} to {describe(desired[d])} due to {label(d)} (replacing existing override)")
     for d in unchanged:
-        print(f"  OK     {d}: unchanged")
+        print(f"  OK   {d} already {describe(desired[d])} due to {label(d)}")
 
     if not created and not updated:
         print("No changes needed.")
