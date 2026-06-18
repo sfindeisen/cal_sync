@@ -1,0 +1,7 @@
+{
+  "google_calendar_id": "wife@example.com",
+  "calcom_schedule_id": null,
+  "sync_window_days": 90,
+  "calcom_api_base": "https://api.cal.com/v2",
+  "calcom_api_version": "2024-06-11"
+}
