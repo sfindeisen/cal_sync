@@ -42,6 +42,16 @@ class TestDiffAndMerge(unittest.TestCase):
             entries, [{"date": "2026-06-22", "startTime": "00:00", "endTime": "00:00", "isUnavailable": True}]
         )
 
+    def test_unavailable_matches_existing_zero_length_range(self):
+        # Cal.com's GET response for a fully-unavailable date apparently
+        # omits the isUnavailable flag, returning just a zero-length range.
+        # That must still compare as unchanged, or every run would re-send it.
+        existing = [{"date": "2026-06-22", "startTime": "00:00", "endTime": "00:00"}]
+        desired = {"2026-06-22": []}
+        _, created, updated, unchanged = cs.diff_and_merge(existing, desired)
+        self.assertEqual((created, updated), ([], []))
+        self.assertEqual(unchanged, ["2026-06-22"])
+
     def test_create_update_unchanged(self):
         existing = [{"date": "2026-07-02", "startTime": "09:00", "endTime": "10:00"}]
         desired = {

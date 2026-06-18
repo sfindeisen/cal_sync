@@ -243,7 +243,14 @@ def to_override_entries(date_str, intervals):
 
 
 def entry_key(entries):
-    return sorted(("u",) if e.get("isUnavailable") else ("r", e["startTime"], e["endTime"]) for e in entries)
+    def key_for(e):
+        # Cal.com's GET response doesn't reliably echo the isUnavailable
+        # flag back; a zero-length time range means the same thing.
+        if e.get("isUnavailable") or e.get("startTime") == e.get("endTime"):
+            return ("u",)
+        return ("r", e["startTime"], e["endTime"])
+
+    return sorted(key_for(e) for e in entries)
 
 
 def diff_and_merge(existing, desired):
@@ -295,12 +302,14 @@ def run(config, dry_run):
     def label(d):
         return "+".join(sorted(markers[d]))
 
-    for d in created:
-        print(f"  TRIM {d} to {describe(desired[d])} due to {label(d)}")
-    for d in updated:
-        print(f"  TRIM {d} to {describe(desired[d])} due to {label(d)} (replacing existing override)")
-    for d in unchanged:
-        print(f"  OK   {d} already {describe(desired[d])} due to {label(d)}")
+    created_set, updated_set = set(created), set(updated)
+    for d in sorted(desired):
+        if d in created_set:
+            print(f"  TRIM {d} to {describe(desired[d])} due to {label(d)}")
+        elif d in updated_set:
+            print(f"  TRIM {d} to {describe(desired[d])} due to {label(d)} (replacing existing override)")
+        else:
+            print(f"  OK   {d} already {describe(desired[d])} due to {label(d)}")
 
     if not created and not updated:
         print("No changes needed.")
