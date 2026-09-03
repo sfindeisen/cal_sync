@@ -17,6 +17,7 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 import requests
+from google.auth.exceptions import RefreshError
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -97,7 +98,13 @@ def load_google_credentials(token_path, credentials_path):
     if token_path.exists():
         creds = Credentials.from_authorized_user_file(str(token_path), SCOPES)
         if creds.expired and creds.refresh_token:
-            creds.refresh(Request())
+            try:
+                creds.refresh(Request())
+            except RefreshError:
+                # Stored refresh token is stale/revoked (invalid_grant).
+                # Discard it and fall through to full re-authorization.
+                print("Stored Google token is no longer valid; re-authorizing...", file=sys.stderr)
+                creds = None
 
     if not creds or not creds.valid:
         if not credentials_path.exists():
