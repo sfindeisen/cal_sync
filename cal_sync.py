@@ -119,6 +119,15 @@ def load_google_credentials(token_path, credentials_path):
                 "interactively (not from cron) to authorize Google Calendar access."
             )
         print("No valid Google token found; opening a browser to authorize access...")
+        # run_local_server() prints the authorization URL and then blocks on
+        # the local redirect. With stdout redirected to a log file (block
+        # buffered), that URL would not appear until after auth completes,
+        # which is too late to open it manually. Line buffering flushes it,
+        # and our message above, as soon as it is printed.
+        try:
+            sys.stdout.reconfigure(line_buffering=True)
+        except AttributeError:
+            pass
         flow = InstalledAppFlow.from_client_secrets_file(str(credentials_path), SCOPES)
         creds = flow.run_local_server(port=0)
 
